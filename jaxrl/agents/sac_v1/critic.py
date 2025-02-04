@@ -18,6 +18,8 @@ def update_v(key: PRNGKey, actor: Model, critic: Model, value: Model,
     if soft_critic:
         target_v -= temp() * log_probs
 
+    # if soft_critic: target_v = q - log_probs; value_loss = (v - (q - log_probs))^2
+    # else: target_v = q; value_loss = (q - v)^2
     def value_loss_fn(value_params: Params) -> Tuple[jnp.ndarray, InfoDict]:
         v = value.apply_fn({'params': value_params}, batch.observations)
         value_loss = ((v - target_v)**2).mean()
@@ -37,6 +39,7 @@ def update_q(critic: Model, target_value: Model, batch: Batch,
 
     target_q = batch.rewards + discount * batch.masks * next_v
 
+    # target_q = r + gamma v(s'); v_loss = (q - target_q)^2
     def critic_loss_fn(critic_params: Params) -> Tuple[jnp.ndarray, InfoDict]:
         q1, q2 = critic.apply_fn({'params': critic_params}, batch.observations,
                                  batch.actions)
