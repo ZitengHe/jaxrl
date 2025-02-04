@@ -24,10 +24,10 @@ def update(key: PRNGKey, actor: Model, critic: Model, target_critic: Model,
     next_q1, next_q2 = target_critic(batch.next_observations, next_actions)
     next_q = jnp.minimum(next_q1, next_q2)
 
-    target_q = batch.rewards + discount * batch.masks * next_q
+    target_q = batch.rewards + discount * batch.masks * next_q   # target_q = r + gamma q(s')
 
     if backup_entropy:
-        target_q -= discount * batch.masks * temp() * next_log_probs
+        target_q -= discount * batch.masks * temp() * next_log_probs    # target_q = r + gamma * q(s') - gamma * next_log_probs
 
     def critic_loss_fn(critic_params: Params) -> Tuple[jnp.ndarray, InfoDict]:
         q1, q2 = critic.apply_fn({'params': critic_params}, batch.observations,
