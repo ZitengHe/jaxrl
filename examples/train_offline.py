@@ -1,5 +1,6 @@
 import os
-
+import sys
+sys.path.insert(0, '/home/air/hzt/jaxrl/')
 import numpy as np
 import tqdm
 from absl import app, flags
@@ -32,7 +33,7 @@ flags.DEFINE_boolean('tqdm', True, 'Use tqdm progress bar.')
 flags.DEFINE_boolean('save_video', False, 'Save videos during evaluation.')
 config_flags.DEFINE_config_file(
     'config',
-    'configs/bc_default.py',
+    '/home/air/hzt/jaxrl/examples/configs/bc_default.py',
     'File path to the training hyperparameter configuration.',
     lock_config=False)
 
