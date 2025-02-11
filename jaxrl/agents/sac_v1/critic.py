@@ -1,6 +1,7 @@
 from typing import Tuple
 
 import jax.numpy as jnp
+from jax import lax
 
 from jaxrl.datasets import Batch
 from jaxrl.networks.common import InfoDict, Model, Params, PRNGKey
@@ -9,9 +10,15 @@ from jaxrl.networks.common import InfoDict, Model, Params, PRNGKey
 def update_v(key: PRNGKey, actor: Model, critic: Model, value: Model,
              temp: Model, batch: Batch,
              soft_critic: bool) -> Tuple[Model, InfoDict]:
-    dist = actor(batch.observations)
-    actions = dist.sample(seed=key)
-    log_probs = dist.log_prob(actions)
+    try:
+        dist = actor(batch.observations)
+        actions = dist.sample(seed=key)
+        log_probs = dist.log_prob(actions)
+
+    except:
+        dist_a, dist_s = actor(batch.observations)
+        actions = dist_a.sample(seed=key)
+        log_probs = dist_a.log_prob(actions)
     q1, q2 = critic(batch.observations, actions)
     target_v = jnp.minimum(q1, q2)
 

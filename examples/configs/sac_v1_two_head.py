@@ -4,12 +4,13 @@ import ml_collections
 def get_config():
     config = ml_collections.ConfigDict()
 
-    config.algo = 'sacv1'
+    config.algo = 'sacv1_two_head'
 
     config.actor_lr = 3e-4
     config.value_lr = 3e-4
     config.critic_lr = 3e-4
     config.temp_lr = 3e-4
+    config.inv_lr = 3e-4
 
     config.hidden_dims = (256, 256)
     config.share_hidden_dims = (1024,)

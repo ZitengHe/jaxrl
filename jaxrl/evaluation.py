@@ -10,11 +10,20 @@ def evaluate(agent, env: gym.Env, num_episodes: int) -> Dict[str, float]:
     successes = None
     for _ in range(num_episodes):
         observation, done = env.reset(), False
+        total_reward = 0.0
         while not done:
             action = agent.sample_actions(observation, temperature=0.0)
-            observation, _, done, info = env.step(action)
-        for k in stats.keys():
-            stats[k].append(info['episode'][k])
+            observation, reward, done, info = env.step(action)
+            total_reward = total_reward + reward
+
+        stats['return'].append(total_reward)
+        stats['length'].append(info['episode']['length'])
+
+        # while not done:
+        #     action = agent.sample_actions(observation, temperature=0.0)
+        #     observation, _, done, info = env.step(action)
+        # for k in stats.keys():
+        #     stats[k].append(info['episode'][k])
 
         if 'is_success' in info:
             if successes is None:
