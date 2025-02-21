@@ -15,6 +15,7 @@ from jaxrl.agents import (AWACLearner, DDPGLearner, REDQLearner, SACLearner,
 from jaxrl.datasets import ReplayBuffer
 from jaxrl.evaluation import evaluate
 from jaxrl.utils import make_env
+import jax.numpy as jnp
 
 import wandb
 
@@ -47,25 +48,41 @@ config_flags.DEFINE_config_file(
     'config',
     # 'configs/sac_v1_two_head.py',
     # 'configs/sac_v1_default.py',
-    '/home/dodo/hzt/jaxrl/examples/configs/sac_v1_two_head.py',
+    'configs/sac_default.py',
+    # '/home/dodo/hzt/jaxrl/examples/configs/sac_v1_two_head.py',
     'File path to the training hyperparameter configuration.',
     lock_config=False)
 
 
 def main(_):
-    project = 'SAC-JAX-RL'
+    project = 'SAC-JAX-RL-0218'
     group = 'sacv1_two_head'
+    
 
+    if 'Swimmer' in FLAGS.env_name:
+        FLAGS.config.discount = 0.99999
+    
+    if 'attention' in FLAGS.config.algo:
+        reduction_ratio = FLAGS.config.reduction_ratio
+    else:
+        reduction_ratio = 0
+    if 'two_head' in FLAGS.config.algo:
+        beta = FLAGS.config.beta
+        algo_log = 'AWR_' + FLAGS.config.algo
+    else:
+        beta = 0
+        algo_log = FLAGS.config.algo
+    
     kwargs = dict(FLAGS.config)
     algo = kwargs['algo']
-    run_name = f"{FLAGS.env_name}__{algo}__state_pred_loss-3__{FLAGS.seed}__{int(time.time())}"
+    run_name = f"{FLAGS.env_name}__{algo}__{FLAGS.seed}__{int(time.time())}"
 
     wandb.init(project=project, 
             group=group,
             name=run_name,
             # name=FLAGS.env_name+'_seed-'+str(FLAGS.seed)+'_'+str(np.random.randint(0, 1000)),
             config={
-                'algo': algo,
+                'algo': algo_log,
                 'env_name': FLAGS.env_name,
                 'seed': FLAGS.seed,
                 'actor_lr': FLAGS.config.actor_lr,
@@ -81,6 +98,10 @@ def main(_):
                 'qf_lr': FLAGS.config.critic_lr,
                 'temp_lr': FLAGS.config.temp_lr,
                 'inv_lr': FLAGS.config.inv_lr,
+                'individual_temp': FLAGS.config.individual_temp,
+                'reduction_ratio': reduction_ratio,
+                'beta': beta,
+                'discount': FLAGS.config.discount,
             },
             
             monitor_gym=True,
@@ -118,7 +139,7 @@ def main(_):
                             env.action_space.sample()[np.newaxis],
                             policy_update_delay=FLAGS.updates_per_step,
                             **kwargs)
-    elif algo == 'sacv1' or algo == 'sacv1_two_head':
+    elif algo == 'sacv1' or algo == 'sacv1_two_head' or algo == 'sacv1_two_head_attention' or algo == 'sacv1_attention':
         agent = SACV1Learner(FLAGS.seed,
                              env.observation_space.sample()[np.newaxis],
                              env.action_space.sample()[np.newaxis], **kwargs)
@@ -136,7 +157,6 @@ def main(_):
     replay_buffer = ReplayBuffer(env.observation_space, env.action_space,
                                  replay_buffer_size or FLAGS.max_steps)
 
-    eval_returns = []
     observation, done = env.reset(), False
     for i in tqdm.tqdm(range(1, FLAGS.max_steps + 1),
                        smoothing=0.1,
@@ -145,7 +165,19 @@ def main(_):
             action = env.action_space.sample()
         else:
             action = agent.sample_actions(observation)
+            if 'two_head' in algo:
+                pred_next_observation = agent.sample_next_states(observation)
+        # print(action.shape)
+        if len(action.shape) == 2 and action.shape[0]==1:
+            action = action.squeeze(0)
+
         next_observation, reward, done, info = env.step(action)
+        if 'two_head' in algo:
+            if i >= FLAGS.start_training:
+                if i % FLAGS.log_interval == 0:
+                    log_data = {f'training/pred_observation_MSE': jnp.mean(next_observation - pred_next_observation)**2}
+                    wandb.log(log_data, step=i)
+            
 
         if not done or 'TimeLimit.truncated' in info:
             mask = 1.0
@@ -170,7 +202,7 @@ def main(_):
         if i >= FLAGS.start_training:
             for _ in range(FLAGS.updates_per_step):
                 batch = replay_buffer.sample(FLAGS.batch_size)
-                update_info = agent.update(batch)
+                update_info = agent.update(batch, env)
 
             if i % FLAGS.log_interval == 0:
                 log_data = {f'training/{k}': v for k, v in update_info.items()}

@@ -14,7 +14,7 @@ env_list=(
     # "Hopper-v3"
     # "Walker2d-v3"
     # "Humanoid-v3"
-    # "Swimmer-v3"
+    "Swimmer-v3"
     # "HumanoidStandup-v2"
 	)
 
@@ -23,7 +23,7 @@ for env in ${env_list[*]}; do
 dir_name=$env
 
 nohup python train.py \
-  --config=configs/sac_default.py \
+  --config=configs/sac_v1_default.py \
   --env_name=$env \
   --wandb_mode=online \
   > "${log_dir}/${dir_name}.log" 2>&1 &

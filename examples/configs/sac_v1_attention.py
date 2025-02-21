@@ -4,7 +4,7 @@ import ml_collections
 def get_config():
     config = ml_collections.ConfigDict()
 
-    config.algo = 'sacv1_two_head'
+    config.algo = 'sacv1_attention'
 
     config.actor_lr = 3e-4
     config.value_lr = 3e-4
@@ -27,8 +27,10 @@ def get_config():
     config.target_entropy = None
 
     config.replay_buffer_size = None
+
     config.individual_temp = False
 
-    config.beta = 0
+    config.reduction_ratio = 16
+
 
     return config

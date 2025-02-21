@@ -1,5 +1,6 @@
 from typing import Tuple
 
+from gym import Env
 import jax
 import jax.numpy as jnp
 import jax.lax as lax
@@ -33,10 +34,12 @@ def update(key: PRNGKey, actor: Model, critic: Model, temp: Model,
 
     return new_actor, info
 
-def update_two_head(key: PRNGKey, actor: Model, value: Model, critic: Model, inv_dyna: Model, temp: Model,
-           batch: Batch) -> Tuple[Model, InfoDict]:
+def update_two_head(key: PRNGKey, actor: Model, value: Model, critic: Model, inv_dyna: Model, temp: Model, temp_state: Model,
+           batch: Batch, beta: float=5, env: Env=None) -> Tuple[Model, InfoDict]:
+    
 
     def actor_loss_fn(actor_params: Params) -> Tuple[jnp.ndarray, InfoDict]:
+        info = {}
         dist_a, dist_s = actor.apply_fn({'params': actor_params},
                        batch.observations,
                        training=True,   
@@ -47,34 +50,63 @@ def update_two_head(key: PRNGKey, actor: Model, value: Model, critic: Model, inv
         q1, q2 = critic(batch.observations, actions)
         q = jnp.minimum(q1, q2)
 
-        next_state = dist_s.sample(seed=key)
-        log_probs_s = dist_s.log_prob(next_state)
-        next_v = value(next_state)
+
 
         # pre_state = dist_s.sample(seed=key)
         # input_inv = jnp.concatenate([batch.observations, pre_state], -1)
         # frozen_params_inv = jax.lax.stop_gradient(inv_dyna.params)
         # dist_a_inv = inv_dyna.apply_fn({'params': frozen_params_inv}, input_inv)
 
-        
+        ####### AWR   或许也是有道理的？
+        ### 
+        # v = value(batch.observations)
+        # target_v = batch.rewards + batch.masks * next_v
+        # exp_s = jnp.exp(beta * (target_v - v))
+        # exp_s = jnp.minimum(exp_s, 20.0)
+        # state_loss = -(exp_s * log_probs_s).mean()
+        ### 
+        next_state = dist_s.sample(seed=key)
+        log_probs_s = dist_s.log_prob(next_state)
+        next_v = value(next_state)
+        if beta > 0:
+            v = value(batch.observations)
+            next_v = value(batch.next_observations)
+            target_v = batch.rewards + batch.masks * next_v
+            exp_s = jnp.exp(beta * (target_v - v))
+            exp_s = jnp.minimum(exp_s, 20.0)
+            log_probs_s = dist_s.log_prob(batch.next_observations)
+
+            state_loss = -(exp_s * log_probs_s).mean()
+            info.update({
+                'AWR_adv_v': (target_v-v).mean(),
+                'AWR_exp_s': exp_s.mean(),
+            })
+        else:
+            if temp_state is not None:
+                state_loss = (log_probs_s * temp_state() - next_v).mean()
+            else:
+                state_loss = (log_probs_s * temp() - next_v).mean()
         action_loss = (log_probs_a * temp() - q).mean()
-        state_loss = (log_probs_s * temp() - next_v).mean()
+
+        # for action in actions:
+        #     print(action.shape)
+        #     next_observation, reward, done, info = env.step(action)
+        # exit()
         # inv_loss = ((dist_a.mean() - dist_a_inv)**2).mean()
         state_pred_loss = jnp.mean((batch.next_observations - next_state) ** 2)
 
-        actor_loss = action_loss + state_pred_loss + state_loss
+        actor_loss = action_loss + state_loss
 
         # actor_loss = action_loss
-
-        return actor_loss, {
+        info.update({
             'actor_loss': actor_loss,
             'state_loss': state_loss,
-            # 'inv_loss': inv_loss,
+            # 'inv_loss': inv_loss,  # 如果需要的话可以取消注释
             'pre_state_MSE': state_pred_loss,
             'entropy_a': -log_probs_a.mean(),
             'entropy_s': -log_probs_s.mean(),
-
-        }
+        })
+        return actor_loss, info
     
     new_actor, info = actor.apply_gradient(actor_loss_fn)
 

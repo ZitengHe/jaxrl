@@ -13,6 +13,8 @@ def evaluate(agent, env: gym.Env, num_episodes: int) -> Dict[str, float]:
         total_reward = 0.0
         while not done:
             action = agent.sample_actions(observation, temperature=0.0)
+            if len(action.shape) == 2 and action.shape[0]==1:
+                action = action.squeeze(0)
             observation, reward, done, info = env.step(action)
             total_reward = total_reward + reward
 

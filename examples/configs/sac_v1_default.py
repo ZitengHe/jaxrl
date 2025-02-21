@@ -10,6 +10,7 @@ def get_config():
     config.value_lr = 3e-4
     config.critic_lr = 3e-4
     config.temp_lr = 3e-4
+    config.inv_lr = 3e-4
 
     config.hidden_dims = (256, 256)
     config.share_hidden_dims = (1024,)
@@ -26,5 +27,7 @@ def get_config():
     config.target_entropy = None
 
     config.replay_buffer_size = None
+
+    config.individual_temp = False
 
     return config
